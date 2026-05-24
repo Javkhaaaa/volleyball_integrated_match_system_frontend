@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Button, Empty, Skeleton, message } from 'antd';
-import { ArrowLeftOutlined, LinkOutlined, ShareAltOutlined } from '@ant-design/icons';
+import {
+  ArrowLeftOutlined, LinkOutlined, ShareAltOutlined,
+  CalendarOutlined, ClockCircleOutlined, FireOutlined,
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { announcements as api } from '../api';
 
@@ -9,16 +12,23 @@ export default function NewsDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [item, setItem] = useState(null);
+  const [related, setRelated] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     setNotFound(false);
+    setRelated([]);
     api.get(id)
       .then(r => setItem(r.announcement))
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
+    // Fire-and-forget — sidebar is optional, no need to block the page on it.
+    api.publicList('NEWS', 6)
+      .then(r => setRelated((r.announcements || []).filter(n => String(n.id) !== String(id)).slice(0, 3)))
+      .catch(() => {});
+    window.scrollTo({ top: 0, behavior: 'instant' });
   }, [id]);
 
   // Estimate read time at ~220 words / minute. Even rough numbers feel
@@ -44,22 +54,25 @@ export default function NewsDetailPage() {
 
   if (loading) {
     return (
-      <div className="news-detail">
-        <div className="news-detail-topbar">
-          <Skeleton.Button active size="small" style={{ width: 120 }} />
-          <Skeleton.Button active size="small" style={{ width: 100 }} />
+      <div className="news-article">
+        <div className="news-article-hero is-skeleton">
+          <div className="page-container">
+            <Skeleton.Button active size="small" style={{ width: 120 }} />
+            <div style={{ height: 24 }} />
+            <Skeleton active paragraph={{ rows: 2 }} title={{ width: '70%' }} />
+          </div>
         </div>
-        <Skeleton.Image style={{ width: '100%', height: 360 }} active />
-        <div style={{ height: 28 }} />
-        <Skeleton active paragraph={{ rows: 2 }} />
-        <div style={{ height: 16 }} />
-        <Skeleton active paragraph={{ rows: 8 }} />
+        <div className="page-container">
+          <div className="news-article-body-grid">
+            <Skeleton active paragraph={{ rows: 10 }} />
+          </div>
+        </div>
       </div>
     );
   }
   if (notFound || !item) {
     return (
-      <div className="news-detail">
+      <div className="page-container" style={{ padding: '32px 0 60px' }}>
         <Empty description="Мэдээ олдсонгүй" />
         <div style={{ textAlign: 'center', marginTop: 16 }}>
           <Button onClick={() => navigate('/')}>Нүүр хуудас руу буцах</Button>
@@ -68,61 +81,122 @@ export default function NewsDetailPage() {
     );
   }
 
+  const dateStr = dayjs(item.publishedAt).format('YYYY оны MM сарын DD');
+  const hasImage = !!item.imageUrl;
+
   return (
-    <article className="news-detail">
-      <div className="news-detail-topbar">
-        <Link to="/" className="news-detail-back">
-          <ArrowLeftOutlined /> Нүүр хуудас
-        </Link>
-        <button type="button" className="news-detail-share" onClick={handleShare}>
-          <ShareAltOutlined /> Хуваалцах
-        </button>
-      </div>
+    <article className="news-article">
+      {/* Immersive hero: title + meta overlaid on the image (or a colored
+          band if there's no image). Replaces the previous plain page top. */}
+      <header
+        className={`news-article-hero ${hasImage ? 'has-image' : 'no-image'}`}
+        style={hasImage ? { backgroundImage: `url(${item.imageUrl})` } : undefined}
+      >
+        <div className="news-article-hero-overlay" />
+        <div className="page-container news-article-hero-inner">
+          <Link to="/" className="news-article-back">
+            <ArrowLeftOutlined /> Нүүр хуудас
+          </Link>
 
-      {item.imageUrl && (
-        <div className="news-detail-hero" style={{ backgroundImage: `url(${item.imageUrl})` }} />
-      )}
+          <div className="news-article-meta-row">
+            <span className="pill"><FireOutlined /> Мэдээ</span>
+            <span className="meta-item"><CalendarOutlined /> {dateStr}</span>
+            {readTime && (
+              <span className="meta-item"><ClockCircleOutlined /> {readTime} мин уншина</span>
+            )}
+          </div>
 
-      <header className="news-detail-head">
-        <div className="news-detail-meta">
-          <span className="pill">Мэдээ</span>
-          <span className="date">{dayjs(item.publishedAt).format('YYYY оны MM сарын DD')}</span>
-          {readTime && (
-            <>
-              <span className="dot" aria-hidden />
-              <span className="read-time">{readTime} мин уншина</span>
-            </>
-          )}
+          <h1>{item.title}</h1>
+          {item.subtitle && <p className="lede">{item.subtitle}</p>}
         </div>
-        <h1>{item.title}</h1>
-        {item.subtitle && <p className="lede">{item.subtitle}</p>}
       </header>
 
-      {item.body && (
-        <div className="news-detail-body">
-          {item.body.split('\n').map((line, i) => (
-            line.trim() ? <p key={i}>{line}</p> : <br key={i} />
-          ))}
-        </div>
-      )}
+      <div className="page-container">
+        <div className="news-article-body-grid">
+          <div className="news-article-main">
+            {item.body && (
+              <div className="news-detail-body">
+                {item.body.split('\n').map((line, i) => (
+                  line.trim() ? <p key={i}>{line}</p> : <br key={i} />
+                ))}
+              </div>
+            )}
 
-      {item.link && (
-        <div className="news-detail-cta">
-          <span className="source-note">Эх сурвалжаас дэлгэрэнгүйг уншина уу.</span>
-          <Button
-            type="primary"
-            size="large"
-            icon={<LinkOutlined />}
-            onClick={() => window.open(item.link, '_blank', 'noopener,noreferrer')}
-            style={{ background: 'var(--accent)', borderColor: 'var(--accent)', color: '#fff', fontWeight: 700 }}
-          >
-            {item.ctaText || 'Эх сурвалж нээх'}
-          </Button>
-        </div>
-      )}
+            {item.link && (
+              <div className="news-article-cta-card">
+                <div className="cta-card-text">
+                  <div className="cta-card-eyebrow">Эх сурвалж</div>
+                  <div className="cta-card-line">Дэлгэрэнгүйг анхны эх сурвалжаас үзнэ үү</div>
+                </div>
+                <Button
+                  type="primary"
+                  size="large"
+                  icon={<LinkOutlined />}
+                  onClick={() => window.open(item.link, '_blank', 'noopener,noreferrer')}
+                  style={{ background: 'var(--accent)', borderColor: 'var(--accent)', color: '#fff', fontWeight: 700 }}
+                >
+                  {item.ctaText || 'Эх сурвалж нээх'}
+                </Button>
+              </div>
+            )}
+          </div>
 
-      <div className="news-detail-footer-back">
-        <Link to="/"><ArrowLeftOutlined /> Бусад мэдээ үзэх</Link>
+          <aside className="news-article-aside">
+            <div className="news-aside-card">
+              <div className="aside-label">Энэ мэдээ</div>
+              <ul className="aside-list">
+                <li>
+                  <CalendarOutlined />
+                  <div>
+                    <div className="k">Нийтэлсэн</div>
+                    <div className="v">{dateStr}</div>
+                  </div>
+                </li>
+                {readTime && (
+                  <li>
+                    <ClockCircleOutlined />
+                    <div>
+                      <div className="k">Унших хугацаа</div>
+                      <div className="v">~{readTime} минут</div>
+                    </div>
+                  </li>
+                )}
+              </ul>
+              <button type="button" className="aside-share" onClick={handleShare}>
+                <ShareAltOutlined /> Хуваалцах
+              </button>
+            </div>
+
+            {related.length > 0 && (
+              <div className="news-aside-card">
+                <div className="aside-label">Холбоотой мэдээ</div>
+                <ul className="aside-related">
+                  {related.map(n => (
+                    <li key={n.id}>
+                      <Link to={`/news/${n.id}`}>
+                        {n.imageUrl ? (
+                          <div className="thumb" style={{ backgroundImage: `url(${n.imageUrl})` }} />
+                        ) : (
+                          <div className="thumb is-empty" />
+                        )}
+                        <div className="rel-body">
+                          <div className="rel-date">{dayjs(n.publishedAt).format('MM.DD')}</div>
+                          <div className="rel-title">{n.title}</div>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </aside>
+        </div>
+
+        <div className="news-article-footer">
+          <Link to="/" className="footer-back-btn">
+            <ArrowLeftOutlined /> Бусад мэдээ үзэх
+          </Link>
+        </div>
       </div>
     </article>
   );

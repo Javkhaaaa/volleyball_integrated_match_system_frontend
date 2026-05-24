@@ -148,7 +148,8 @@ export default function App() {
 
   const isHome = location.pathname === '/';
   const isLogin = location.pathname === '/login';
-  const isFullBleed = isHome || isLogin;
+  const isNewsDetail = /^\/news\/[^/]+$/.test(location.pathname);
+  const isFullBleed = isHome || isLogin || isNewsDetail;
   // Use the shared permission helper (avoids shadowing the import).
   const isAdmin = isAdminRole(user);
 
